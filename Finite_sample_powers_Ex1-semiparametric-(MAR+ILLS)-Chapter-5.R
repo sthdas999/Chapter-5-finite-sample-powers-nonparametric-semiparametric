@@ -14,9 +14,9 @@ library(lattice)
 library(pracma)
 
 ## Chapter 5 ##
-## Finite sample simulation powers of test statistics under nonparametric regression ##
-## Ex - 3 : X~Uniform(0,1) and e|X=x~Cauchy(0, 1+cx), c>-1 ##
-## Missing at Random (MAR) & NW method of estimation of m(X) ##
+## Finite sample simulation powers of test statistics under semiparametric regression ##
+## Missing at Random (MAR) & ILLS method of estimation of m(X) ##
+## Ex - 1 : X~U(0,1) and e|X=x~N(0,(1+ax)/100), a in R ##
 ## third order difference of Y ##
 
 ## Under null hypothesis H0 ##
@@ -31,13 +31,17 @@ n.hat = n*pr ## number of missing Y-values ##
 
 alpha = 0.05 ## level of significance of test ##
 
-e = rcauchy(n, location = 0, scale = 1)  ## generation of 100 i.i.d. errors under H0 ##
+e = rnorm(n, mean = 0, sd = 0.1)  ## generation of 100 i.i.d. errors under H0 ##
 
 x = runif(n, 0, 1)  ## generation of 100 i,i.d. covariate values under H0 ##
 
+z = runif(n) ## generation of 100 i.i.d. parametric covariate Z values ##
+
+beta = 5 ## preassigned value of beta ##
+
 mx = 0.5*x^2 - x^3  ## regression function ##
 
-y = mx + e  ## generation of responses under H0 ##
+y = z*beta+mx + e  ## generation of responses under H0 ##
 
 y.fix = y ## fixed original n observations on Y ##
 
@@ -100,13 +104,94 @@ y.dash = y.miss[-c(count.1)]  ## Y-observations after removal of NA values from 
 
 x.dash = x[-c(count.1)]  ## X-observations corresponding to y.dash ##
 
-## Now, to estimate the unknown regression function using NW method at x.dash in first step as follows. ##
+z.dash = z[-c(count.1)]  ## Z-observations corresponding to (x.dash,y.dash) ##
 
-ms.hat<- c()  ## estimated regression curve m(X) based on X and available Y-observations at primary step ##
+## estimation of beta based on non-missing observations ##
 
-for(i in 1:length(y.dash))
+k<- function(u)  ## definition of epanechnikov kernel ##
 {
-  ms.hat[i]<- NW.WtKernel(x.dash, y.dash, x.dash[i],Kernel = "Ep", Bndwdth = h)
+  return((3/4)*(1-u^2)*(abs(u)<=1))
+}
+
+gy.dash.hat<- function(t)  ## estimation of gy.hat = regression function of Y on X ##
+{
+  u<- (x.dash-t)/h
+  m<- k(u)*y.dash
+  if(sum(k(u)!=0))
+  {
+    return((sum(m)/sum(k(u))))
+  }
+  else
+  {
+    return(0)
+  }
+}
+
+gx.dash.hat<- function(t)  ## estimation of gy.hat = regression function of Y on Z ##
+{
+  u<- (x.dash-t)/h
+  m<- k(u)*z.dash
+  if(sum(k(u)!=0))
+  {
+    return((sum(m)/sum(k(u))))
+  }
+  else
+  {
+    return(0)
+  }
+}
+
+ex.dash.hat<- c()  ## estimation of error in the regression function of Y on Z ##
+ey.dash.hat<- c()  ## estimation of error in the regression function of Y on X ##
+for(i in 1:n.hat)
+{
+  ex.dash.hat[i] = z.dash[i] - gx.dash.hat(x.dash[i])
+  ey.dash.hat[i] = y.dash[i] - gy.dash.hat(x.dash[i])
+}
+beta.hat.u = sum(ex.dash.hat*ey.dash.hat) / sum(ex.dash.hat^2)  ## estimation of beta
+beta.hat.u
+
+y.dash = y.dash-z.dash*beta.hat.u ## transformed non-missing response ##
+
+## Now, to estimate the unknown regression function using ILLS method at x.dash in first step as follows. ##
+
+ep.kernel = function(u) 0.75*(1-u^2) ## Epanechnikov kernel ##
+
+M1<- function(u)  
+{
+  vec1<- c()
+  for(i in 1:length(x.dash))
+  {
+    vec1[i]<- (u-x.dash[i])*ep.kernel((u-x.dash[i])/h)
+  }
+  return(sum(vec1))
+}
+
+M2<- function(v)  
+{
+  vec2<- c()
+  for(i in 1:length(x.dash))
+  {
+    vec2[i]<- (v-x.dash[i])^2*ep.kernel((v-x.dash[i])/h)
+  }
+  return(sum(vec2))
+}
+
+lls1<- function(c)
+{
+  g1 = c()
+  for(i in 1:length(x.dash))  { g1[i]<- (M2(x.dash[i])-(x.dash[i]-c)*M1(x.dash[i]))*ep.kernel((x.dash[i]-c)/h)*y.dash[i]  }
+  g2 = c()
+  for(i in 1:length(x.dash))  { g2[i]<- (M2(x.dash[i])-(x.dash[i]-c)*M1(x.dash[i]))*ep.kernel((x.dash[i]-c)/h)  }
+  return(sum(g1)/sum(g2))
+}
+
+## least square estimation of intercept based on non-missing (X,Y)-observations only ##
+
+t0.hat<- c()  ## t0.hat is also the first step estimator of the regression function based on non-missing observations of (X,Y) ##
+for(i in 1:length(x.dash))
+{
+  t0.hat[i]<- lls1(x.dash[i])
 }
 
 x.miss = x[count.1]  ## X-observations corresponding to missing Y-values ##
@@ -114,7 +199,7 @@ x.miss = x[count.1]  ## X-observations corresponding to missing Y-values ##
 m.hat.miss = c()  ## estimation of regression function at the missing observations of Y ##
 for(i in 1:length(x.miss))
 {
-  m.hat.miss[i] = NW.WtKernel(x.dash, y.dash, x.miss[i], Kernel = "Ep", Bndwdth = h)
+  m.hat.miss[i] = lls1(x.miss[i])
 }
 
 m.hat.miss.arranged<- c()  
@@ -125,20 +210,102 @@ for(i in 1:length(count.1))
 
 y.complete<- replace(y.miss,which(is.na(y.miss)==T),m.hat.miss.arranged)   ## complete data on Y after imputation ##
 
-ml.hat<- c()  ## estimated regression curve m(X) based on full set of observations on (X,Y) at second step ##
+## Now, estimation of beta based on the complete semiparametric programs ##
 
-for(i in 1:length(y.complete))
+gy.hat<- function(t)  ## estimation of gy.hat = regression function of Y on X ##
 {
-  ml.hat[i]<- NW.WtKernel(x,y.complete,x[i], Kernel = "Ep", Bndwdth = h)
+  u<- (x-t)/h
+  m<- k(u)*y.complete
+  if(sum(k(u)!=0))
+  {
+    return((sum(m)/sum(k(u))))
+  }
+  else
+  {
+    return(0)
+  }
 }
 
-e.hat = y.complete - ml.hat ## estimation of errors ##
+gx.hat<- function(t)  ## estimation of gy.hat = regression function of Y on Z ##
+{
+  u<- (x-t)/h
+  m<- k(u)*z
+  if(sum(k(u)!=0))
+  {
+    return((sum(m)/sum(k(u))))
+  }
+  else
+  {
+    return(0)
+  }
+}
+
+ex.hat<- c()  ## estimation of error in the regression function of Y on Z ##
+ey.hat<- c()  ## estimation of error in the regression function of Y on X ##
+for(i in 1:n)
+{
+  ex.hat[i] = z[i] - gx.hat(x[i])
+  ey.hat[i] = y.complete[i] - gy.hat(x[i])
+}
+
+beta.hat = sum(ex.hat*ey.hat) / sum(ex.hat^2)  ## estimation of beta
+beta.hat
+
+y.complete = y.complete-z*beta.hat ## transformed non-missing response ##
+
+estimated.beta.values = c(beta,beta.hat.u,beta.hat)
+
+estimated.beta.values
+
+## Now, based on n paired observations (X, Y.complete), the regression function of the complete model needs to be estimated. ##
+
+M1.1<- function(u)  
+{
+  v1<- c()
+  for(i in 1:n)
+  {
+    v1[i]<- (u-x[i])*ep.kernel((u-x[i])/h)
+  }
+  return(sum(v1))
+}
+
+M2.1<- function(v)  
+{
+  v2<- c()
+  for(i in 1:n)
+  {
+    v2[i]<- (v-x[i])*ep.kernel((v-x[i])/h)
+  }
+  return(sum(v2))
+}
+
+
+lls2<- function(c)
+{
+  r1 = c()
+  for(i in 1:n)  { r1[i]<- (M2.1(x[i])-(x[i]-c)*M1.1(x[i]))*ep.kernel((x[i]-c)/h)*y.complete[i]  }
+  r2 = c()
+  for(i in 1:n)  { r2[i]<- (M2.1(x[i])-(x[i]-c)*M1.1(x[i]))*ep.kernel((x[i]-c)/h)  }
+  return(sum(r1)/sum(r2))
+}
+
+## least square estimation of intercept based on full set of (X,Y)-observations ##
+
+s0.hat<- c()  ## t0.hat is also the first step estimator of the regression function based on non-missing observations of (X,Y) ##
+for(i in 1:n)
+{
+  s0.hat[i]<- lls2(x[i])
+}
+
+## s0.hat is the second step cum final estimator of the regression function of the model ##
+
+e.hat = y.complete - s0.hat ## estimation of errors ##
 
 e.cen = e.hat - mean(e.hat) ## estimation of centered errors ##
 
 e.cen.boot<- sample(e.cen, n, replace = T) ## resamples of centered errors from the empirical distribution function of centered error ##
 
-y.boot<- ml.hat+e.cen.boot ## resampled responses ##
+y.boot<- s0.hat+e.cen.boot ## resampled responses ##
 
 DATA<- cbind.data.frame(x,e.cen.boot,y.boot) ## dataset on X-observations and resampled responses ##
 
@@ -322,44 +489,44 @@ Tn3.critical
 
 ###############################################################################
 
-Power_of_test_statistics = function(c)
+Power_of_test_statistics = function(a)
 {
-  y.boot.c<- m.hat+(1+c*x)*e.cen.boot ## resampled responses ##
-  y.c.sort<- c()  ## induced resampled responses ##
+  y.boot.a<- m.hat+sqrt(1+a*x)*e.cen.boot ## resampled responses ##
+  y.a.sort<- c()  ## induced resampled responses ##
   for(i in 1:n)
   {
-    y.c.sort[i]<- y.boot.c[which(x==x.sort[i])]
+    y.a.sort[i]<- y.boot.a[which(x==x.sort[i])]
   }
-  y3.boot.c<- c()  ## third difference of induced resampled responses ##
+  y3.boot.a<- c()  ## third difference of induced resampled responses ##
   for(i in 1:n)
   {
     if(i==1)
     {
-      y3.boot.c[i] = -y.c.sort[2]
+      y3.boot.a[i] = -y.a.sort[2]
     }
     else if(i==2)
     {
-      y3.boot.c[i] = -2*y.c.sort[1]+3*y.c.sort[2]-y.c.sort[3]
+      y3.boot.a[i] = -2*y.a.sort[1]+3*y.a.sort[2]-y.a.sort[3]
     }
     else if(i==n)
     {
-      y3.boot.c[i] = y.c.sort[n-2]-3*y.c.sort[n-1]+2*y.c.sort[n]
+      y3.boot.a[i] = y.a.sort[n-2]-3*y.a.sort[n-1]+2*y.a.sort[n]
     }
     else
     {
-      y3.boot.c[i] = y.c.sort[i-2]-3*y.c.sort[i-1]+3*y.c.sort[i]-y.c.sort[i+1]
+      y3.boot.a[i] = y.a.sort[i-2]-3*y.a.sort[i-1]+3*y.a.sort[i]-y.a.sort[i+1]
     }
   }
   ## Power of Kolmogorov Smirnov test statistic ##
-  v.c = ecdf(y3.boot.c)(y3.boot.c) ## empirical CDF values of induced Y ##
-  v.c.vector<- vector("list", B)
+  v.a = ecdf(y3.boot.a)(y3.boot.a) ## empirical CDF values of induced Y ##
+  v.a.vector<- vector("list", B)
   for(j in 1:B) {
-    v.c.vector[[j]]<- sample(v.c,n,T)
+    v.a.vector[[j]]<- sample(v.a,n,T)
   }
   Z1.uv<- vector("list",B)  ## generation of Wiener processes of size n in B(=1000) resamples ##
   for(j in 1:B)
   {
-    for(i in 1:n) {Z1.uv[[j]][i]<- sqrt(n)*(mecdf(u,v.c,u.vector[[j]][i],v.c.vector[[j]][i])-u.vector[[j]][i]*v.c.vector[[j]][i]) }
+    for(i in 1:n) {Z1.uv[[j]][i]<- sqrt(n)*(mecdf(u,v.a,u.vector[[j]][i],v.a.vector[[j]][i])-u.vector[[j]][i]*v.a.vector[[j]][i]) }
   }
   KS.alt = c()
   for(j in 1:B)
@@ -371,7 +538,7 @@ Power_of_test_statistics = function(c)
   Z1.uv<- vector("list",B)  ## generation of Wiener processes of size n in B(=1000) resamples ##
   for(j in 1:B)
   {
-    for(i in 1:n) {Z1.uv[[j]][i]<- sqrt(n)*(mecdf(u,v.c,u.vector[[j]][i],v.c.vector[[j]][i])-u.vector[[j]][i]*v.c.vector[[j]][i]) }
+    for(i in 1:n) {Z1.uv[[j]][i]<- sqrt(n)*(mecdf(u,v.a,u.vector[[j]][i],v.a.vector[[j]][i])-u.vector[[j]][i]*v.a.vector[[j]][i]) }
   }
   CM.alt = c()
   for(j in 1:B)
@@ -384,13 +551,13 @@ Power_of_test_statistics = function(c)
   for(j in 1:B)
   {
     for(i in 1:n) {
-      if(sqrt(u.vector[[j]][i]*v.c.vector[[j]][i]*(1-u.vector[[j]][i])*(1-v.c.vector[[j]][i]))==0)
+      if(sqrt(u.vector[[j]][i]*v.a.vector[[j]][i]*(1-u.vector[[j]][i])*(1-v.a.vector[[j]][i]))==0)
       {
-        Z1.dash.uv[[j]][i]<- sqrt(n)*(mecdf(u,v.c,u.vector[[j]][i],v.c.vector[[j]][i])-u.vector[[j]][i]*v.c.vector[[j]][i])
+        Z1.dash.uv[[j]][i]<- sqrt(n)*(mecdf(u,v.a,u.vector[[j]][i],v.a.vector[[j]][i])-u.vector[[j]][i]*v.a.vector[[j]][i])
       }
       else
       {
-        Z1.dash.uv[[j]][i]<- sqrt(n)*(mecdf(u,v.c,u.vector[[j]][i],v.c.vector[[j]][i])-u.vector[[j]][i]*v.c.vector[[j]][i])/sqrt(u.vector[[j]][i]*v.c.vector[[j]][i]*(1-u.vector[[j]][i])*(1-v.c.vector[[j]][i]))
+        Z1.dash.uv[[j]][i]<- sqrt(n)*(mecdf(u,v.a,u.vector[[j]][i],v.a.vector[[j]][i])-u.vector[[j]][i]*v.a.vector[[j]][i])/sqrt(u.vector[[j]][i]*v.a.vector[[j]][i]*(1-u.vector[[j]][i])*(1-v.a.vector[[j]][i]))
       }
     }
   }
@@ -401,41 +568,41 @@ Power_of_test_statistics = function(c)
   }
   Power.AD = mean(AD.alt>AD.critical)
   #############################################################
-  y3.boot.B.c = vector("list", B)
+  y3.boot.B.a = vector("list", B)
   for(j in 1:B)
   {
-    y3.boot.B.c[[j]] = sample(y3.boot.c,n,replace = T)
+    y3.boot.B.a[[j]] = sample(y3.boot.a,n,replace = T)
   }
   ## Power of Tn1 ##
   Tn1.alt<- c()  ## Tn1 values under H0 ##
   for(j in 1:B)
   {
-    Tn1.alt[j] = Tn1(x.sort.B[[j]],y3.boot.B.c[[j]])
+    Tn1.alt[j] = Tn1(x.sort.B[[j]],y3.boot.B.a[[j]])
   }
   Power.Tn1 = mean(Tn1.alt>Tn1.critical)
   ## Power of Tn2 ##
   Tn2.alt<- c()  ## Tn1 values under H0 ##
   for(j in 1:B)
   {
-    Tn2.alt[j] = Tn2(x.sort.B[[j]],y3.boot.B.c[[j]])
+    Tn2.alt[j] = Tn2(x.sort.B[[j]],y3.boot.B.a[[j]])
   }
   Power.Tn2 = mean(Tn2.alt>Tn2.critical)
   ## Power of Tn3 ##
   Tn3.alt<- c()  ## Tn1 values under H0 ##
   for(j in 1:B)
   {
-    Tn3.alt[j] = Tn3(x.sort.B[[j]],y3.boot.B.c[[j]])
+    Tn3.alt[j] = Tn3(x.sort.B[[j]],y3.boot.B.a[[j]])
   }
   Power.Tn3 = mean(Tn3.alt>Tn3.critical)
   return(cbind(Power.KS,Power.CM,Power.AD,Power.Tn1,Power.Tn2,Power.Tn3))
 }
 
-c = readline()  ## give the value of a in console ##
-c = scan()  ## value of a is fixed ##
+a = readline()  ## give the value of a in console ##
+a = scan()  ## value of a is fixed ##
 
 Power_of_test_statistics(a)  ## powers of test statistics for a = 0,...,10 ##
 
-## c = seq(0,10,1)
+## a = seq(0,10,1)
 ## KS = vector Power.KS for a = 0,1,...,10
 ## CM = vector Power.CM for a = 0,1,...,10
 ## AD = vector Power.AD for a = 0,1,...,10
@@ -446,17 +613,17 @@ Power_of_test_statistics(a)  ## powers of test statistics for a = 0,...,10 ##
 ## graphical representation of the power curves of T1, T2 and T3 ##
 
 
-#plot(c, KS, xlim=c(0,10), ylim=c(0,1), type="l", pch=10, col="red", xlab=expression(c), ylab=expression("Finite sample powers"))
+#plot(a, KS, xlim=c(0,10), ylim=c(0,1), type="l", pch=10, col="red", xlab=expression(a), ylab=expression("Finite sample powers"))
 # Add a line
-#lines(c, CM, xlim=c(0,10), ylim=c(0,1), pch=10, col="purple", type="l")
+#lines(a, CM, xlim=c(0,10), ylim=c(0,1), pch=10, col="purple", type="l")
 # Add a line
-#lines(c, AD, xlim=c(0,10), ylim=c(0,1), pch=10, col="violet", type="l")
+#lines(a, AD, xlim=c(0,10), ylim=c(0,1), pch=10, col="violet", type="l")
 # Add a line
-#lines(c, T1, xlim=c(0,10), ylim=c(0,1), pch=10, col="black", type="l")
+#lines(a, T1, xlim=c(0,10), ylim=c(0,1), pch=10, col="black", type="l")
 # Add a line
-#lines(c, T2, xlim=c(0,10), ylim=c(0,1), pch=10, col="green", type="l")
+#lines(a, T2, xlim=c(0,10), ylim=c(0,1), pch=10, col="green", type="l")
 # Add a line
-#lines(c, T3, xlim=c(0,10), ylim=c(0,1), pch=10, col="blue", type="l")
+#lines(a, T3, xlim=c(0,10), ylim=c(0,1), pch=10, col="blue", type="l")
 # Add a legend
 #legend("bottomright",
 #c(expression(paste('T'['n,KS']),paste('T'['n,CM']),paste('T'['n,AD']),paste('T'['n1']),paste('T'['n2']),paste('T'['n3']))),

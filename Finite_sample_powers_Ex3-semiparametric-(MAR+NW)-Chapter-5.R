@@ -14,9 +14,9 @@ library(lattice)
 library(pracma)
 
 ## Chapter 5 ##
-## Finite sample simulation powers of test statistics under nonparametric regression ##
+## Finite sample simulation powers of test statistics under semiparametric regression ##
 ## Ex - 3 : X~Uniform(0,1) and e|X=x~Cauchy(0, 1+cx), c>-1 ##
-## Missing at Random (MAR) & NW method of estimation of m(X) ##
+## Missing Completely at Random (MAR) & NW method of estimation of m(X) ##
 ## third order difference of Y ##
 
 ## Under null hypothesis H0 ##
@@ -35,9 +35,13 @@ e = rcauchy(n, location = 0, scale = 1)  ## generation of 100 i.i.d. errors unde
 
 x = runif(n, 0, 1)  ## generation of 100 i,i.d. covariate values under H0 ##
 
+z = runif(n) ## generation of 100 i.i.d. parametric covariate Z values ##
+
+beta = 5 ## preassigned value of beta ##
+
 mx = 0.5*x^2 - x^3  ## regression function ##
 
-y = mx + e  ## generation of responses under H0 ##
+y = z*beta+mx + e  ## generation of responses under H0 ##
 
 y.fix = y ## fixed original n observations on Y ##
 
@@ -100,6 +104,55 @@ y.dash = y.miss[-c(count.1)]  ## Y-observations after removal of NA values from 
 
 x.dash = x[-c(count.1)]  ## X-observations corresponding to y.dash ##
 
+z.dash = z[-c(count.1)]  ## Z-observations corresponding to (x.dash,y.dash) ##
+
+## estimation of beta based on non-missing observations ##
+
+k<- function(u)  ## definition of epanechnikov kernel ##
+{
+  return((3/4)*(1-u^2)*(abs(u)<=1))
+}
+
+gy.dash.hat<- function(t)  ## estimation of gy.hat = regression function of Y on X ##
+{
+  u<- (x.dash-t)/h
+  m<- k(u)*y.dash
+  if(sum(k(u)!=0))
+  {
+    return((sum(m)/sum(k(u))))
+  }
+  else
+  {
+    return(0)
+  }
+}
+
+gx.dash.hat<- function(t)  ## estimation of gy.hat = regression function of Y on Z ##
+{
+  u<- (x.dash-t)/h
+  m<- k(u)*z.dash
+  if(sum(k(u)!=0))
+  {
+    return((sum(m)/sum(k(u))))
+  }
+  else
+  {
+    return(0)
+  }
+}
+
+ex.dash.hat<- c()  ## estimation of error in the regression function of Y on Z ##
+ey.dash.hat<- c()  ## estimation of error in the regression function of Y on X ##
+for(i in 1:n.hat)
+{
+  ex.dash.hat[i] = z.dash[i] - gx.dash.hat(x.dash[i])
+  ey.dash.hat[i] = y.dash[i] - gy.dash.hat(x.dash[i])
+}
+beta.hat.u = sum(ex.dash.hat*ey.dash.hat) / sum(ex.dash.hat^2)  ## estimation of beta
+beta.hat.u
+
+y.dash = y.dash-z.dash*beta.hat.u ## transformed non-missing response ##
+
 ## Now, to estimate the unknown regression function using NW method at x.dash in first step as follows. ##
 
 ms.hat<- c()  ## estimated regression curve m(X) based on X and available Y-observations at primary step ##
@@ -124,6 +177,53 @@ for(i in 1:length(count.1))
 }
 
 y.complete<- replace(y.miss,which(is.na(y.miss)==T),m.hat.miss.arranged)   ## complete data on Y after imputation ##
+
+## Now, estimation of beta based on the complete semiparametric programs ##
+
+gy.hat<- function(t)  ## estimation of gy.hat = regression function of Y on X ##
+{
+  u<- (x-t)/h
+  m<- k(u)*y.complete
+  if(sum(k(u)!=0))
+  {
+    return((sum(m)/sum(k(u))))
+  }
+  else
+  {
+    return(0)
+  }
+}
+
+gx.hat<- function(t)  ## estimation of gy.hat = regression function of Y on Z ##
+{
+  u<- (x-t)/h
+  m<- k(u)*z
+  if(sum(k(u)!=0))
+  {
+    return((sum(m)/sum(k(u))))
+  }
+  else
+  {
+    return(0)
+  }
+}
+
+ex.hat<- c()  ## estimation of error in the regression function of Y on Z ##
+ey.hat<- c()  ## estimation of error in the regression function of Y on X ##
+for(i in 1:n)
+{
+  ex.hat[i] = z[i] - gx.hat(x[i])
+  ey.hat[i] = y.complete[i] - gy.hat(x[i])
+}
+
+beta.hat = sum(ex.hat*ey.hat) / sum(ex.hat^2)  ## estimation of beta
+beta.hat
+
+y.complete = y.complete-z*beta.hat ## transformed non-missing response ##
+
+estimated.beta.values = c(beta,beta.hat.u,beta.hat)
+
+estimated.beta.values
 
 ml.hat<- c()  ## estimated regression curve m(X) based on full set of observations on (X,Y) at second step ##
 

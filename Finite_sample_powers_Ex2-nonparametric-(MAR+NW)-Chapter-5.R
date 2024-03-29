@@ -16,7 +16,7 @@ library(pracma)
 ## Chapter 5 ##
 ## Finite sample simulation powers of test statistics under nonparametric regression ##
 ## Ex - 2 : X~U(0,1) and e|X=x =D= {(W_x-p_x)/(10*sqrt(2*p_x))} with W_x ~ chi_square_{p_x}, p_x = (1/bx), b>0 ##
-## Missing Completely at Random (MAR) & NW method of estimation of m(X) ##
+## Missing at Random (MAR) & NW method of estimation of m(X) ##
 ## third order difference of Y ##
 
 ## Under null hypothesis H0 ##

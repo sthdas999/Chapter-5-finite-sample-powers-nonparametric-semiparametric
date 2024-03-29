@@ -15,7 +15,7 @@ library(pracma)
 
 ## Chapter 5 ##
 ## Finite sample simulation powers of test statistics under nonparametric regression ##
-## Missing Completely at Random (MAR) & ILLS method of estimation of m(X) ##
+## Missing at Random (MAR) & ILLS method of estimation of m(X) ##
 ## Ex - 1 : X~U(0,1) and e|X=x~N(0,(1+ax)/100), a in R ##
 ## third order difference of Y ##
 
